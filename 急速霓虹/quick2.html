@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>极速霓虹：Cyber Evolution Ultra Pro</title>
+  <style>
+    :root {
+      --neon: #0ff; --gold: #ff0; --danger: #f05; --bg: #010105;
+      --fever: #f0f; --boss: #ff6600; --panel: rgba(10, 10, 30, 0.92);
+      --green: #0f0; --blue: #00f;
+    }
+
+    body {
+      margin: 0; overflow: hidden; background: var(--bg);
+      font-family: 'Segoe UI', 'MicroSoft YaHei', sans-serif;
+      touch-action: none; color: white; user-select: none;
+    }
+    canvas { display: block; position: fixed; top: 0; left: 0; }
+
+    /* UI 增强设计 */
+    #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+
+    /* 顶部 HUD */
+    .hud { padding: 25px; display: flex; justify-content: space-between; align-items: center; pointer-events: none; }
+    #score-display { font-size: 38px; font-weight: 900; color: var(--neon); text-shadow: 0 0 20px var(--neon); font-style: italic; }
+
+    /* 通用面板 */
+    .glass-panel {
+      background: var(--panel); backdrop-filter: blur(25px);
+      border: 2px solid rgba(0, 255, 255, 0.4); border-radius: 30px;
+      box-shadow: 0 0 50px rgba(0, 255, 255, 0.15), inset 0 0 20px rgba(255,255,255,0.05);
+      padding: 30px; pointer-events: auto; text-align: center;
+    }
+
+    .neon-btn {
+      background: none; border: 1px solid var(--neon); color: var(--neon);
+      padding: 10px 20px; border-radius: 50px; cursor: pointer; font-weight: bold;
+      transition: 0.3s; text-transform: uppercase; letter-spacing: 2px; margin: 5px;
+    }
+    .neon-btn:hover { background: var(--neon); color: #000; box-shadow: 0 0 30px var(--neon); transform: scale(1.05); }
+    .neon-btn.active { background: var(--neon); color: #000; box-shadow: 0 0 20px var(--neon); }
+    .neon-btn.gold { border-color: var(--gold); color: var(--gold); }
+    .neon-btn.gold:hover { background: var(--gold); color: #000; box-shadow: 0 0 30px var(--gold); }
+
+    .center-ui { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); min-width: 340px; }
+
+    /* 技能与商店列表 */
+    .list-container { max-height: 250px; overflow-y: auto; margin: 15px 0; padding: 10px; }
+    .item-card {
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(255,255,255,0.05); margin-bottom: 12px; padding: 15px;
+      border-radius: 20px; border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    /* 底部进度条区域 */
+    .bottom-ui {
+      position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+      width: 280px; pointer-events: none; text-align: center;
+    }
+    .bar-wrap { height: 8px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-top: 5px; border: 1px solid rgba(255,255,255,0.1); }
+    .bar-fill { height: 100%; width: 0%; transition: width 0.1s; }
+
+    /* Boss 血条 */
+    #boss-hp-ui { position: absolute; top: 100px; left: 50%; transform: translateX(-50%); width: 80%; display: none; text-align: center; }
+
+    .selector-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 15px 0; }
+  </style>
+</head>
+<body>
+
+<div id="ui-layer">
+  <!-- 顶部 HUD -->
+  <div class="hud">
+    <div style="font-size: 14px; opacity: 0.8;">
+      <span class="t-wave">WAVE</span> <span id="lvl-val" style="color:var(--neon)">1</span><br>
+      <span id="diff-label" style="font-size:10px; color:var(--gold)">NORMAL</span>
+    </div>
+    <div id="score-display">0</div>
+    <div style="font-size: 14px; opacity: 0.8;">
+      <span class="t-gold">GOLD</span> <span id="gold-val" style="color:var(--gold)">0</span>
+    </div>
+  </div>
+
+  <!-- 主菜单 -->
+  <div id="start-screen" class="center-ui glass-panel">
+    <h1 style="color:var(--neon); margin:0 0 10px; letter-spacing:8px; font-style: italic; text-shadow: 0 0 20px var(--neon);">NEON DASH</h1>
+
+    <div class="selector-row">
+      <button class="neon-btn" style="font-size:10px;" id="d-btn-0" onclick="setDifficulty(0)">EASY</button>
+      <button class="neon-btn active" style="font-size:10px;" id="d-btn-1" onclick="setDifficulty(1)">NORMAL</button>
+      <button class="neon-btn" style="font-size:10px;" id="d-btn-2" onclick="setDifficulty(2)">HARD</button>
+    </div>
+
+    <div class="selector-row" style="background:rgba(255,255,255,0.05); border-radius:20px; padding:5px;">
+      <button class="neon-btn" style="border:none" onclick="changeStartWave(-1)">◀</button>
+      <span style="min-width:80px; font-weight:bold"><span class="t-wave">WAVE</span> <span id="start-wave-val">1</span></span>
+      <button class="neon-btn" style="border:none" onclick="changeStartWave(1)">▶</button>
+    </div>
+
+    <button class="neon-btn t-start" onclick="startGame()" style="width:100%; margin-top:20px; font-size:18px;">INITIATE</button>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px">
+      <button class="neon-btn gold t-skills" onclick="showPanel('skill-panel')">SKILLS</button>
+      <button class="neon-btn t-factory" onclick="showPanel('shop-panel')">SKINS</button>
+    </div>
+    <button class="neon-btn" onclick="toggleLang()" style="border:none; font-size:10px; opacity:0.5; margin-top:10px;">ZH / EN</button>
+  </div>
+
+  <!-- 技能升级 -->
+  <div id="skill-panel" class="center-ui glass-panel" style="display:none">
+    <h2 class="t-skills" style="color:var(--gold); margin:0 0 15px 0;">SKILL LAB</h2>
+    <div class="list-container" id="skill-list"></div>
+    <button class="neon-btn t-back" onclick="showPanel('start-screen')">BACK</button>
+  </div>
+
+  <!-- 霓虹工厂 -->
+  <div id="shop-panel" class="center-ui glass-panel" style="display:none">
+    <h2 class="t-factory" style="color:var(--neon); margin:0 0 15px 0;">FACTORY</h2>
+    <div class="list-container" id="skin-list" style="display:grid; grid-template-columns: 1fr 1fr; gap: 15px;"></div>
+    <button class="neon-btn t-back" onclick="showPanel('start-screen')">BACK</button>
+  </div>
+
+  <!-- 结算 -->
+  <div id="game-over-panel" class="center-ui glass-panel" style="display:none">
+    <h2 class="t-over" style="color:var(--danger)">CORE BREACH</h2>
+    <div style="font-size:50px; margin:20px 0; color:var(--neon); font-weight:900" id="final-score">0</div>
+    <button class="neon-btn t-confirm" onclick="backToMenu()">REBOOT</button>
+  </div>
+
+  <!-- Boss UI -->
+  <div id="boss-hp-ui">
+    <div style="color:var(--boss); font-size:12px; font-weight:bold; letter-spacing:2px;" class="t-boss-alert">BOSS DETECTED</div>
+    <div class="bar-wrap" style="height:12px; border-color:var(--boss)"><div id="boss-hp-fill" style="background:var(--boss); width:100%; height:100%"></div></div>
+  </div>
+
+  <!-- 消息提示 -->
+  <div id="center-msg" style="position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); font-size: 40px; font-weight: 900; opacity: 0; pointer-events: none; text-shadow: 0 0 30px var(--neon); transition: 0.3s; z-index:100"></div>
+
+  <!-- 底部状态条 (Fever + Power) -->
+  <div class="bottom-ui">
+    <div id="power-ui" style="display:none; margin-bottom:10px">
+      <div id="power-label" style="font-size:10px; color:var(--neon); text-transform:uppercase">POWER</div>
+      <div class="bar-wrap"><div id="power-fill" class="bar-fill" style="background:var(--neon)"></div></div>
+    </div>
+    <div style="font-size:9px; color:var(--fever); letter-spacing:3px" class="t-fever-mode">FEVER</div>
+    <div class="bar-wrap"><div id="fever-fill" class="bar-fill" style="background:var(--fever)"></div></div>
+  </div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+  /** 1. 语言与基础配置 **/
+  const LANGS = {
+    zh: {
+      wave: "波次", gold: "霓虹币", start: "启动协议", factory: "形状工厂", skills: "技能实验室",
+      over: "核心损毁", confirm: "重置系统", back: "返回",
+      ready: "初始化...", feverStart: "超载模式!", bossAlert: "警告：领主拦截!",
+      magnet: "磁场范围", shield: "防御模块", fever: "充能速率", bonus: "收益倍率",
+      lv: "等级", max: "极限", cost: "成本", use: "使用", own: "已拥有",
+      easy: "简单", normal: "普通", hard: "疯狂",
+      skins: { square: "方阵", circle: "光环", triangle: "锋芒", diamond: "晶核", star: "超新星", hexa: "矩阵" }
+    },
+    en: {
+      wave: "WAVE", gold: "GOLD", start: "INITIATE", factory: "FACTORY", skills: "SKILLS",
+      over: "FATAL ERROR", confirm: "REBOOT", back: "BACK",
+      ready: "INITIALIZING...", feverStart: "OVERLOAD!", bossAlert: "BOSS INCOMING!",
+      magnet: "Magnet Range", shield: "Shield Dur.", fever: "Charge Rate", bonus: "Gold Yield",
+      lv: "Lv", max: "MAX", cost: "Cost", use: "USE", own: "OWNED",
+      easy: "EASY", normal: "NORMAL", hard: "HARD",
+      skins: { square: "Cube", circle: "Halo", triangle: "Delta", diamond: "Core", star: "Nova", hexa: "Matrix" }
+    }
+  };
+
+  const G = {
+    lang: localStorage.getItem('nd_lang') || 'zh',
+    active: false, score: 0, gold: 0,
+    highScore: parseInt(localStorage.getItem('nd_hi')) || 0,
+    totalGold: parseInt(localStorage.getItem('nd_gold')) || 0,
+    maxUnlockedWave: parseInt(localStorage.getItem('nd_max_wave')) || 1,
+    startLvl: 1, difficulty: 1,
+    lvl: 1, entities: [], particles: [], bgParticles: [], shake: 0, lastTime: 0,
+    powerTimer: 0, powerMax: 300, powerType: null,
+    fever: 0, feverMode: false, shieldActive: false,
+    bossActive: false, boss: { hp: 0, maxHp: 100, x: 0, dir: 1 },
+    upgrades: JSON.parse(localStorage.getItem('nd_upgrades')) || { magnet: 0, shield: 0, fever: 0, bonus: 0 },
+    ownedSkins: JSON.parse(localStorage.getItem('nd_skins')) || ['square'],
+    currentSkin: localStorage.getItem('nd_active_skin') || 'square',
+    playerSize: 22, targetSize: 22
+  };
+
+  /** 2. 形状库 **/
+  const SKINS = {
+    square: { draw: (c, x, y, s) => c.fillRect(x-s/2, y-s/2, s, s) },
+    circle: { draw: (c, x, y, s) => { c.beginPath(); c.arc(x, y, s/2, 0, 6.28); c.fill(); } },
+    triangle: { draw: (c, x, y, s) => { c.beginPath(); c.moveTo(x, y-s/2); c.lineTo(x-s/2, y+s/2); c.lineTo(x+s/2, y+s/2); c.closePath(); c.fill(); } },
+    diamond: { draw: (c, x, y, s) => { c.beginPath(); c.moveTo(x, y-s/2); c.lineTo(x+s/2, y); c.lineTo(x, y+s/2); c.lineTo(x-s/2, y); c.closePath(); c.fill(); } },
+    star: { draw: (c, x, y, s) => {
+        c.beginPath(); for(let i=0; i<10; i++) { const r = i%2===0?s/2:s/5; const a = i*Math.PI/5-Math.PI/2; c.lineTo(x+Math.cos(a)*r, y+Math.sin(a)*r); } c.closePath(); c.fill();
+      }},
+    hexa: { draw: (c, x, y, s) => {
+        c.beginPath(); for(let i=0; i<6; i++) { c.lineTo(x+Math.cos(i*Math.PI/3)*s/2, y+Math.sin(i*Math.PI/3)*s/2); } c.closePath(); c.fill();
+      }}
+  };
+
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  let playerPos = { x: 0, y: 0, trail: [] };
+
+  /** 3. 初始化背景粒子 **/
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    G.bgParticles = [];
+    const colors = ['#0ff','#f0f','#ff0','#0f0','#f05','#00f'];
+    for(let i=0; i<60; i++) G.bgParticles.push({
+      x: Math.random()*canvas.width, y: Math.random()*canvas.height,
+      v: Math.random()*2+0.5, size: Math.random()*3,
+      c: colors[Math.floor(Math.random()*colors.length)],
+      opacity: Math.random()
+    });
+  }
+  window.addEventListener('resize', resize); resize();
+
+  window.addEventListener('mousemove', (e) => { playerPos.x = e.clientX; playerPos.y = e.clientY - 30; });
+  window.addEventListener('touchmove', (e) => {
+    const t = e.touches[0]; playerPos.x = t.clientX; playerPos.y = t.clientY - 30;
+  }, {passive: false});
+
+  /** 4. 核心逻辑引擎 **/
+  function startGame() {
+    G.active = true; G.score = 0; G.gold = 0; G.fever = 0; G.lvl = G.startLvl;
+    G.entities = []; G.particles = []; G.playerSize = 22; G.targetSize = 22; G.shieldActive = false;
+    playerPos.x = canvas.width/2; playerPos.y = canvas.height*0.8;
+    document.querySelectorAll('.center-ui').forEach(p => p.style.display='none');
+    showCenterMsg(LANGS[G.lang].ready);
+    G.lastTime = performance.now();
+    requestAnimationFrame(update);
+  }
+
+  function update(time) {
+    if(!G.active) return;
+    const dt = Math.min((time - G.lastTime) / 16.66, 3);
+    G.lastTime = time;
+
+    // 霓虹拖曳背景
+    ctx.fillStyle = 'rgba(2, 2, 12, 0.18)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 动态彩色粒子背景
+    G.bgParticles.forEach(p => {
+      p.y += p.v * dt; if(p.y > canvas.height) p.y = -10;
+      ctx.fillStyle = p.c; ctx.globalAlpha = p.opacity * 0.4;
+      ctx.fillRect(p.x, p.y, p.size, p.size);
+    });
+    ctx.globalAlpha = 1;
+
+    // 玩家逻辑
+    G.playerSize += (G.targetSize - G.playerSize) * 0.1 * dt;
+    playerPos.trail.push({x: playerPos.x, y: playerPos.y});
+    if(playerPos.trail.length > 10) playerPos.trail.shift();
+
+    // Fever 逻辑
+    if(G.feverMode) {
+      G.fever -= 0.5 * dt; if(G.fever <= 0) G.feverMode = false;
+    } else {
+      G.fever = Math.max(0, G.fever - 0.04 * dt);
+    }
+    document.getElementById('fever-fill').style.width = G.fever + '%';
+
+    // 生成逻辑
+    const diffMod = [0.7, 1.0, 1.5][G.difficulty];
+    if(!G.bossActive) {
+      if(Math.random() < (0.02 + G.lvl*0.006) * diffMod) spawn('obs');
+      if(Math.random() < 0.018) spawn('coin');
+      if(Math.random() < 0.003) spawn(['shield','magnet','grow','shrink'][Math.floor(Math.random()*4)]);
+    } else {
+      updateBoss(dt);
+    }
+
+    // 实体循环
+    for(let i = G.entities.length - 1; i >= 0; i--) {
+      let e = G.entities[i];
+      let speed = e.speed * dt * (G.feverMode ? 3.2 : 1) * diffMod;
+
+      if(G.powerType === 'magnet' && (e.type === 'coin' || e.type === 'atk')) {
+        const d = Math.hypot(playerPos.x - e.x, playerPos.y - e.y);
+        if(d < 160 + G.upgrades.magnet * 45) {
+          e.x += (playerPos.x - e.x) * 0.22 * dt; e.y += (playerPos.y - e.y) * 0.22 * dt;
+        } else e.y += speed;
+      } else e.y += speed;
+
+      if(Math.hypot(playerPos.x - e.x, playerPos.y - e.y) < (G.playerSize + e.size)/1.8) {
+        handleHit(e, i); continue;
+      }
+      if(e.y > canvas.height + 50) G.entities.splice(i, 1);
+    }
+
+    // 道具计时
+    if(G.powerTimer > 0) {
+      G.powerTimer -= dt;
+      document.getElementById('power-fill').style.width = (G.powerTimer/G.powerMax)*100 + '%';
+      if(G.powerTimer <= 0) {
+        G.powerType = null; G.targetSize = 22; G.shieldActive = false;
+        document.getElementById('power-ui').style.display='none';
+      }
+    }
+
+    // 升级逻辑
+    if(!G.bossActive && G.score > (G.lvl * 300 * diffMod)) {
+      G.lvl++;
+      if(G.lvl > G.maxUnlockedWave) { G.maxUnlockedWave = G.lvl; localStorage.setItem('nd_max_wave', G.lvl); }
+      if(G.lvl % 5 === 0) startBossFight();
+    }
+
+    draw();
+    requestAnimationFrame(update);
+  }
+
+  function spawn(type, x, y) {
+    const colors = { obs:'#f05', coin:'#ff0', shield:'#0cf', magnet:'#f0f', bullet:'#f05', atk:'#fff', grow:'#0f0', shrink:'#00f' };
+    G.entities.push({
+      type, x: x || Math.random()*canvas.width, y: y || -30,
+      size: type === 'obs' ? 22 + Math.random()*18 : 24,
+      speed: 3.8 + G.lvl*0.12,
+      color: colors[type] || '#fff'
+    });
+  }
+
+  function handleHit(e, idx) {
+    G.entities.splice(idx, 1);
+    if(e.type === 'obs' || e.type === 'bullet') {
+      if(G.feverMode) { G.score += 25; createExplosion(e.x, e.y, '#fff', 5); return; }
+      if(G.shieldActive) {
+        G.shieldActive = false; G.powerTimer = 0; G.shake = 25;
+        document.getElementById('power-ui').style.display='none';
+      } else endGame();
+    } else if(e.type === 'coin') {
+      const bonus = 1 + (G.upgrades.bonus * 0.5);
+      G.gold += Math.ceil(5 * bonus);
+      G.totalGold += Math.ceil(5 * bonus);
+      G.fever = Math.min(100, G.fever + (10 + G.upgrades.fever * 4));
+      if(G.fever >= 100 && !G.feverMode) { G.feverMode = true; showCenterMsg(LANGS[G.lang].feverStart, "#f0f"); }
+    } else if(e.type === 'grow') {
+      G.targetSize = 48; G.powerTimer = 250; G.powerType = 'grow';
+      activatePowerUI("BIG", "#0f0");
+    } else if(e.type === 'shrink') {
+      G.targetSize = 10; G.powerTimer = 250; G.powerType = 'shrink';
+      activatePowerUI("SMALL", "#00f");
+    } else if(e.type === 'atk') {
+      G.boss.hp -= 15; G.shake = 12; createExplosion(e.x, e.y, "#fff", 8);
+    } else {
+      G.powerType = e.type; G.powerTimer = G.powerMax * (1 + G.upgrades.shield * 0.5);
+      activatePowerUI(LANGS[G.lang][e.type], e.color);
+      if(e.type === 'shield') G.shieldActive = true;
+    }
+  }
+
+  function activatePowerUI(txt, color) {
+    const ui = document.getElementById('power-ui');
+    ui.style.display = 'block';
+    document.getElementById('power-label').innerText = txt;
+    document.getElementById('power-fill').style.background = color;
+  }
+
+  /** 5. Boss 逻辑 **/
+  function startBossFight() {
+    G.bossActive = true; G.boss.hp = 120 + G.lvl*40; G.boss.maxHp = G.boss.hp; G.boss.x = canvas.width/2;
+    document.getElementById('boss-hp-ui').style.display = 'block';
+    showCenterMsg(LANGS[G.lang].bossAlert, "var(--boss)");
+  }
+
+  function updateBoss(dt) {
+    G.boss.x += G.boss.dir * 4.8 * dt;
+    if(G.boss.x > canvas.width - 60 || G.boss.x < 60) G.boss.dir *= -1;
+    if(Math.random() < 0.07) spawn('bullet', G.boss.x, 80);
+    if(Math.random() < 0.05) spawn('atk');
+    document.getElementById('boss-hp-fill').style.width = (G.boss.hp/G.boss.maxHp)*100 + '%';
+    if(G.boss.hp <= 0) {
+      G.bossActive = false; G.score += 2000;
+      document.getElementById('boss-hp-ui').style.display='none';
+      createExplosion(G.boss.x, 80, "var(--boss)", 30);
+    }
+  }
+
+  function draw() {
+    ctx.save();
+    if(G.shake > 0) { ctx.translate((Math.random()-0.5)*G.shake, (Math.random()-0.5)*G.shake); G.shake *= 0.85; }
+
+    // 玩家拖尾
+    playerPos.trail.forEach((p, i) => {
+      ctx.globalAlpha = i / 10; ctx.fillStyle = G.feverMode ? '#f0f' : '#0ff';
+      SKINS[G.currentSkin].draw(ctx, p.x, p.y, G.playerSize * (i/10));
+    });
+
+    // 玩家本体
+    ctx.globalAlpha = 1; ctx.shadowBlur = 20; ctx.shadowColor = G.feverMode ? '#f0f' : '#0ff';
+    ctx.fillStyle = G.feverMode ? '#fff' : '#0ff';
+    SKINS[G.currentSkin].draw(ctx, playerPos.x, playerPos.y, G.playerSize);
+
+    if(G.shieldActive) {
+      ctx.strokeStyle = '#0cf'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(playerPos.x, playerPos.y, G.playerSize*1.5, 0, 6.28); ctx.stroke();
+    }
+
+    // Boss 绘制
+    if(G.bossActive) {
+      ctx.shadowBlur = 15; ctx.shadowColor = 'var(--boss)';
+      ctx.fillStyle = 'var(--boss)';
+      ctx.fillRect(G.boss.x-40, 60, 80, 35);
+    }
+
+    // 实体
+    G.entities.forEach(e => {
+      ctx.shadowBlur = 15; ctx.shadowColor = e.color; ctx.fillStyle = e.color;
+      if(['coin','atk','grow','shrink'].includes(e.type)) {
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.size/2, 0, 6.28); ctx.fill();
+      } else ctx.fillRect(e.x-e.size/2, e.y-e.size/2, e.size, e.size);
+    });
+
+    // 爆破粒子
+    for(let i=G.particles.length-1; i>=0; i--) {
+      let p = G.particles[i]; p.x += p.vx; p.y += p.vy; p.life -= 0.025;
+      ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 2.5, 2.5);
+      if(p.life <= 0) G.particles.splice(i, 1);
+    }
+    ctx.restore();
+
+    document.getElementById('score-display').innerText = Math.floor(G.score);
+    document.getElementById('gold-val').innerText = G.gold;
+    document.getElementById('lvl-val').innerText = G.lvl;
+  }
+
+  /** 6. UI 与 升级系统 **/
+  function setDifficulty(d) {
+    G.difficulty = d;
+    document.querySelectorAll('.selector-row .neon-btn').forEach((b, i) => {
+      if(i < 3) b.classList.toggle('active', i === d);
+    });
+  }
+
+  function changeStartWave(dir) {
+    G.startLvl = Math.max(1, Math.min(G.maxUnlockedWave, G.startLvl + dir));
+    document.getElementById('start-wave-val').innerText = G.startLvl;
+  }
+
+  function showPanel(id) {
+    document.querySelectorAll('.center-ui').forEach(p => p.style.display='none');
+    document.getElementById(id).style.display='block';
+    if(id === 'skill-panel') renderSkills();
+    if(id === 'shop-panel') renderShop();
+  }
+
+  function renderSkills() {
+    const container = document.getElementById('skill-list'); container.innerHTML = '';
+    const l = LANGS[G.lang];
+    ['magnet', 'shield', 'fever', 'bonus'].forEach(id => {
+      const lv = G.upgrades[id]; const cost = 500 + lv*1000;
+      const div = document.createElement('div'); div.className = 'item-card';
+      div.innerHTML = `<div><b>${l[id]}</b><br><small>${l.lv}: ${lv}/5</small></div>
+            <button class="neon-btn" ${lv>=5||G.totalGold<cost?'disabled':''} onclick="buyUpgrade('${id}',${cost})" style="font-size:10px">${lv>=5?l.max:cost+'G'}</button>`;
+      container.appendChild(div);
+    });
+  }
+
+  function buyUpgrade(id, cost) {
+    G.totalGold -= cost; G.upgrades[id]++;
+    localStorage.setItem('nd_gold', G.totalGold); localStorage.setItem('nd_upgrades', JSON.stringify(G.upgrades));
+    renderSkills(); updateMenuStats();
+  }
+
+  function renderShop() {
+    const list = document.getElementById('skin-list'); list.innerHTML = '';
+    const l = LANGS[G.lang];
+    Object.keys(SKINS).forEach(id => {
+      const s = SKINS[id]; const owned = G.ownedSkins.includes(id); const active = G.currentSkin === id;
+      const div = document.createElement('div'); div.className = 'glass-panel'; div.style.padding = '15px';
+      div.style.borderColor = active ? 'var(--neon)' : 'rgba(255,255,255,0.1)';
+      div.innerHTML = `<canvas id="pre-${id}" width="40" height="40"></canvas><div style="font-size:11px;margin:5px 0">${l.skins[id]}</div>
+            <button class="neon-btn" style="width:100%;font-size:10px;padding:5px">${owned ? (active?'√':l.use) : (id==='square'?0:2000)+'G'}</button>`;
+      div.onclick = () => {
+        const price = (id==='square'?0:2000);
+        if(owned) { G.currentSkin = id; localStorage.setItem('nd_active_skin', id); }
+        else if(G.totalGold >= price) { G.totalGold -= price; G.ownedSkins.push(id); localStorage.setItem('nd_gold', G.totalGold); localStorage.setItem('nd_skins', JSON.stringify(G.ownedSkins)); }
+        renderShop(); updateMenuStats();
+      };
+      list.appendChild(div);
+      const pCtx = document.getElementById(`pre-${id}`).getContext('2d');
+      pCtx.fillStyle = owned ? (active ? '#0ff' : '#066') : '#333';
+      SKINS[id].draw(pCtx, 20, 20, 20);
+    });
+  }
+
+  function toggleLang() { G.lang = G.lang === 'zh' ? 'en' : 'zh'; localStorage.setItem('nd_lang', G.lang); updateMenuStats(); }
+
+  function updateMenuStats() {
+    const l = LANGS[G.lang];
+    document.querySelectorAll('.t-wave').forEach(el => el.innerText = l.wave);
+    document.querySelectorAll('.t-gold').forEach(el => el.innerText = l.gold);
+    document.querySelector('.t-start').innerText = l.start;
+    document.querySelector('.t-factory').innerText = l.factory;
+    document.querySelector('.t-skills').innerText = l.skills;
+    document.querySelector('.t-over').innerText = l.over;
+    document.querySelector('.t-confirm').innerText = l.confirm;
+    document.querySelector('.t-back').innerText = l.back;
+    document.querySelector('.t-fever-mode').innerText = l.fever;
+    document.querySelector('.t-boss-alert').innerText = l.bossAlert;
+    document.getElementById('hi-score').innerText = G.highScore;
+    document.getElementById('total-gold').innerText = G.totalGold;
+    document.getElementById('start-wave-val').innerText = G.startLvl;
+    document.getElementById('diff-label').innerText = l[['easy','normal','hard'][G.difficulty]];
+  }
+
+  function endGame() {
+    G.active = false; G.shake = 35;
+    localStorage.setItem('nd_gold', G.totalGold);
+    if(G.score > G.highScore) { G.highScore = G.score; localStorage.setItem('nd_hi', G.highScore); }
+    document.getElementById('game-over-panel').style.display='block';
+    document.getElementById('final-score').innerText = Math.floor(G.score);
+    document.getElementById('boss-hp-ui').style.display='none';
+  }
+
+  function backToMenu() { document.getElementById('game-over-panel').style.display='none'; document.getElementById('start-screen').style.display='block'; updateMenuStats(); }
+  function showCenterMsg(txt, color) { const m = document.getElementById('center-msg'); m.innerText = txt; m.style.color = color || 'var(--neon)'; m.style.opacity = 1; setTimeout(() => m.style.opacity = 0, 1200); }
+  function createExplosion(x, y, color, count) { for(let i=0; i<count; i++) G.particles.push({ x, y, color, life: 1, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10 }); }
+
+  updateMenuStats();
+</script>
+</body>
+</html>

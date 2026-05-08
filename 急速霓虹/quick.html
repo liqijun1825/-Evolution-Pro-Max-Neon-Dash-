@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>极速霓虹：Cyber Evolution Pro</title>
+  <style>
+    :root {
+      --neon: #0ff; --gold: #ff0; --danger: #f05; --bg: #020208;
+      --fever: #f0f; --boss: #ff6600; --panel: rgba(10, 10, 25, 0.9);
+    }
+
+    body {
+      margin: 0; overflow: hidden; background: var(--bg);
+      font-family: 'Segoe UI', 'MicroSoft YaHei', sans-serif;
+      touch-action: none; color: white; user-select: none;
+    }
+    canvas { display: block; }
+
+    /* UI 通用样式 */
+    #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+    .glass-panel {
+      background: var(--panel); backdrop-filter: blur(15px);
+      border: 1px solid rgba(0, 255, 255, 0.3); border-radius: 25px;
+      box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+      padding: 25px; pointer-events: auto; text-align: center;
+    }
+
+    .hud { padding: 20px; display: flex; justify-content: space-between; align-items: center; }
+    #score-display { font-size: 32px; font-weight: 900; color: var(--neon); text-shadow: 0 0 15px var(--neon); }
+    .hud-val { color: var(--gold); font-weight: bold; }
+
+    .neon-btn {
+      background: none; border: 1px solid var(--neon); color: var(--neon);
+      padding: 12px 25px; border-radius: 50px; cursor: pointer; font-weight: bold;
+      transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; margin: 8px 0;
+    }
+    .neon-btn:hover { background: var(--neon); color: #000; box-shadow: 0 0 20px var(--neon); }
+    .neon-btn.gold { border-color: var(--gold); color: var(--gold); }
+    .neon-btn.gold:hover { background: var(--gold); color: #000; box-shadow: 0 0 20px var(--gold); }
+
+    .center-ui { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); min-width: 320px; }
+
+    .list-container { max-height: 280px; overflow-y: auto; margin: 15px 0; padding: 5px; }
+    .item-card {
+      display: flex; align-items: center; background: rgba(255,255,255,0.05);
+      margin-bottom: 10px; padding: 12px; border-radius: 18px; border: 1px solid rgba(255,255,255,0.1);
+    }
+    .item-icon { width: 40px; height: 40px; margin-right: 12px; }
+    .up-btn { background: var(--neon); color: #000; border: none; padding: 6px 12px; border-radius: 10px; font-weight: bold; cursor: pointer; }
+    .up-btn:disabled { background: #444; color: #888; cursor: default; }
+
+    .progress-container { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 240px; }
+    .bar-wrap { height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-top: 4px; }
+    .bar-fill { height: 100%; width: 0%; transition: width 0.1s; }
+
+    #boss-ui { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); width: 80%; display: none; text-align: center; }
+  </style>
+</head>
+<body>
+
+<div id="ui-layer">
+  <div class="hud">
+    <div><span class="t-wave">WAVE</span> <span id="lvl-val" style="color:var(--neon)">1</span></div>
+    <div id="score-display">0</div>
+    <div><span class="t-gold">GOLD</span> <span id="gold-val" class="hud-val">0</span></div>
+  </div>
+
+  <div id="start-screen" class="center-ui glass-panel">
+    <h1 style="color:var(--neon); margin:0; letter-spacing:5px; font-style: italic;">NEON DASH</h1>
+    <p id="rank-text" style="color:rgba(0,255,255,0.6); font-size: 12px; margin-bottom: 20px;">SYSTEM READY</p>
+
+    <div style="display:flex; justify-content:space-around; margin-bottom: 20px;">
+      <div><div style="font-size:10px; opacity:0.5" class="t-best">BEST</div><div id="hi-score" style="color:var(--neon)">0</div></div>
+      <div><div style="font-size:10px; opacity:0.5" class="t-total-gold">TOTAL</div><div id="total-gold" style="color:var(--gold)">0</div></div>
+    </div>
+
+    <button class="neon-btn t-start" onclick="startGame()" style="width:100%">START</button>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px">
+      <button class="neon-btn gold t-skills" onclick="showPanel('skill-panel')">SKILLS</button>
+      <button class="neon-btn t-factory" onclick="showPanel('shop-panel')">SKINS</button>
+    </div>
+    <button class="neon-btn" onclick="toggleLang()" style="border:none; font-size:10px; opacity:0.5">CN/EN</button>
+  </div>
+
+  <div id="skill-panel" class="center-ui glass-panel" style="display:none">
+    <h2 class="t-skills" style="color:var(--gold)">SKILL LAB</h2>
+    <div class="list-container" id="skill-list"></div>
+    <button class="neon-btn t-back" onclick="showPanel('start-screen')">BACK</button>
+  </div>
+
+  <div id="shop-panel" class="center-ui glass-panel" style="display:none">
+    <h2 class="t-factory" style="color:var(--neon)">FACTORY</h2>
+    <div class="list-container" id="skin-list" style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;"></div>
+    <button class="neon-btn t-back" onclick="showPanel('start-screen')">BACK</button>
+  </div>
+
+  <div id="game-over-panel" class="center-ui glass-panel" style="display:none">
+    <h2 class="t-over" style="color:var(--danger)">FAIL</h2>
+    <div style="font-size:48px; margin:15px 0; color:var(--neon)" id="final-score">0</div>
+    <button class="neon-btn t-confirm" onclick="backToMenu()" style="width:100%">REBOOT</button>
+  </div>
+
+  <div id="boss-ui">
+    <div style="color:var(--boss); font-size:12px; font-weight:bold;" class="t-boss-alert">BOSS INCOMING</div>
+    <div class="bar-wrap" style="height:10px; border:1px solid var(--boss)"><div id="boss-hp-fill" style="background:var(--boss); width:100%; height:100%"></div></div>
+  </div>
+
+  <div id="center-msg" style="position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); font-size: 40px; font-weight: 900; opacity: 0; pointer-events: none; text-shadow: 0 0 20px var(--neon); transition: 0.3s; z-index:100"></div>
+
+  <div class="progress-container">
+    <div id="power-ui" style="display:none; margin-bottom:10px">
+      <div id="power-label" style="font-size:10px; color:var(--neon)">SHIELD</div>
+      <div class="bar-wrap"><div id="power-fill" class="bar-fill" style="background:var(--neon)"></div></div>
+    </div>
+    <div style="font-size:9px; color:var(--fever); letter-spacing:2px" class="t-fever-mode">FEVER</div>
+    <div class="bar-wrap"><div id="fever-fill" class="bar-fill" style="background:var(--fever)"></div></div>
+  </div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+  /** 纠错后的核心配置 **/
+  const LANGS = {
+    zh: {
+      wave: "波次", gold: "霓虹币", start: "启动系统", factory: "形状工厂", skills: "技能实验室",
+      best: "最高评分", totalGold: "总资产", over: "系统崩溃", confirm: "尝试修复", back: "返回",
+      ready: "系统就绪...", feverMode: "狂热能量", feverStart: "超载模式!", bossAlert: "警告：非法拦截!",
+      magnet: "磁场强度", shield: "防御模块", fever: "充能速率", bonus: "数据溢出",
+      lv: "等级", max: "极限", cost: "成本", use: "使用", own: "已拥有",
+      rank0: "系统就绪", rank1: "青铜核心", rank2: "白银协议", rank3: "黄金架构", rank4: "霓虹之神",
+      skins: { square: "方阵", circle: "光环", triangle: "锋芒", diamond: "晶核", star: "超新星", hexa: "矩阵" }
+    },
+    en: {
+      wave: "WAVE", gold: "GOLD", start: "INITIATE", factory: "FACTORY", skills: "SKILLS",
+      best: "BEST", totalGold: "TOTAL", over: "SYSTEM FAIL", confirm: "REBOOT", back: "BACK",
+      ready: "INITIALIZING...", feverMode: "FEVER ENERGY", feverStart: "OVERLOAD!", bossAlert: "BOSS INCOMING!",
+      magnet: "Magnet Range", shield: "Shield Dur.", fever: "Charge Rate", bonus: "Gold Yield",
+      lv: "Lv", max: "MAX", cost: "Cost", use: "USE", own: "OWNED",
+      rank0: "SYSTEM READY", rank1: "BRONZE CORE", rank2: "SILVER PROTO", rank3: "GOLD ARCH", rank4: "NEON GOD",
+      skins: { square: "Cube", circle: "Halo", triangle: "Delta", diamond: "Core", star: "Nova", hexa: "Matrix" }
+    }
+  };
+
+  const G = {
+    lang: localStorage.getItem('nd_lang') || 'zh',
+    active: false, score: 0, gold: 0,
+    highScore: parseInt(localStorage.getItem('nd_hi')) || 0,
+    totalGold: parseInt(localStorage.getItem('nd_gold')) || 0,
+    lvl: 1, entities: [], particles: [], shake: 0, lastTime: 0,
+    powerTimer: 0, powerMax: 300, powerType: null,
+    fever: 0, feverMode: false,
+    bossActive: false, boss: { hp: 0, maxHp: 100, x: 0, dir: 1 },
+    upgrades: JSON.parse(localStorage.getItem('nd_upgrades')) || { magnet: 0, shield: 0, fever: 0, bonus: 0 },
+    ownedSkins: JSON.parse(localStorage.getItem('nd_skins')) || ['square'],
+    currentSkin: localStorage.getItem('nd_active_skin') || 'square',
+    gridScroll: 0
+  };
+
+  const SKINS = {
+    square: { price: 0, draw: (c, x, y, s) => c.fillRect(x-s/2, y-s/2, s, s) },
+    circle: { price: 500, draw: (c, x, y, s) => { c.beginPath(); c.arc(x, y, s/2, 0, 6.28); c.fill(); } },
+    triangle: { price: 1200, draw: (c, x, y, s) => { c.beginPath(); c.moveTo(x, y-s/2); c.lineTo(x-s/2, y+s/2); c.lineTo(x+s/2, y+s/2); c.closePath(); c.fill(); } },
+    diamond: { price: 2500, draw: (c, x, y, s) => { c.beginPath(); c.moveTo(x, y-s/2); c.lineTo(x+s/2.2, y); c.lineTo(x, y+s/2); c.lineTo(x-s/2.2, y); c.closePath(); c.fill(); } },
+    star: { price: 5000, draw: (c, x, y, s) => {
+        c.beginPath(); for(let i=0; i<10; i++) { const r = i%2===0?s/2:s/5; const a = i*Math.PI/5-Math.PI/2; c.lineTo(x+Math.cos(a)*r, y+Math.sin(a)*r); } c.closePath(); c.fill();
+      }},
+    hexa: { price: 10000, draw: (c, x, y, s) => {
+        c.beginPath(); for(let i=0; i<6; i++) { c.lineTo(x+Math.cos(i*Math.PI/3)*s/2, y+Math.sin(i*Math.PI/3)*s/2); } c.closePath(); c.fill();
+      }}
+  };
+
+  const ICONS = {
+    magnet: (ctx, s) => { ctx.strokeStyle = '#f0f'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s/2, s/2, s/4, Math.PI, 0); ctx.stroke(); },
+    shield: (ctx, s) => { ctx.strokeStyle = '#0ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.rect(s*0.3, s*0.3, s*0.4, s*0.4); ctx.stroke(); },
+    fever: (ctx, s) => { ctx.fillStyle = '#f0f'; ctx.beginPath(); ctx.moveTo(s*0.5, s*0.1); ctx.lineTo(s*0.2, s*0.9); ctx.lineTo(s*0.8, s*0.9); ctx.closePath(); ctx.fill(); },
+    bonus: (ctx, s) => { ctx.fillStyle = '#ff0'; ctx.font = 'bold 20px Arial'; ctx.fillText('$', s*0.35, s*0.7); }
+  };
+
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  let player = { x: 0, y: 0, size: 22, trail: [] };
+
+  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+  window.addEventListener('resize', resize); resize();
+
+  const handleMove = (e) => {
+    if(!G.active) return;
+    const t = e.touches ? e.touches[0] : e;
+    player.x = t.clientX; player.y = t.clientY - 30;
+  };
+  window.addEventListener('mousemove', handleMove);
+  window.addEventListener('touchmove', handleMove, {passive: false});
+
+  /** 核心逻辑 **/
+  function startGame() {
+    G.active = true; G.score = 0; G.gold = 0; G.fever = 0; G.lvl = 1; G.entities = []; G.particles = [];
+    document.querySelectorAll('.center-ui').forEach(p => p.style.display='none');
+    showCenterMsg(LANGS[G.lang].ready);
+    G.lastTime = performance.now();
+    update();
+  }
+
+  function update() {
+    if(!G.active) return;
+    const now = performance.now();
+    const dt = Math.min((now - G.lastTime) / 16.66, 3);
+    G.lastTime = now;
+
+    // 拖拽背景
+    ctx.fillStyle = 'rgba(2, 2, 8, 0.2)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 网格线
+    G.gridScroll = (G.gridScroll + 2 * dt) % 40;
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.05)';
+    for(let i=0; i<canvas.width; i+=40) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); }
+    for(let j=G.gridScroll; j<canvas.height; j+=40) { ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(canvas.width, j); ctx.stroke(); }
+
+    player.trail.push({x: player.x, y: player.y});
+    if(player.trail.length > 8) player.trail.shift();
+
+    if(G.feverMode) {
+      G.fever -= 0.5 * dt; if(G.fever <= 0) G.feverMode = false;
+    } else {
+      G.fever = Math.max(0, G.fever - 0.05 * dt);
+    }
+    document.getElementById('fever-fill').style.width = G.fever + '%';
+
+    if(!G.bossActive) {
+      if(Math.random() < 0.03 + G.lvl*0.005) spawn('obs');
+      if(Math.random() < 0.015) spawn('coin');
+      if(Math.random() < 0.002) spawn(['shield','magnet'][Math.floor(Math.random()*2)]);
+    } else {
+      updateBoss(dt);
+    }
+
+    for(let i = G.entities.length - 1; i >= 0; i--) {
+      let e = G.entities[i];
+      let speed = e.speed * dt * (G.feverMode ? 3 : 1);
+
+      if(G.powerType === 'magnet' && (e.type === 'coin' || e.type === 'atk')) {
+        const d = Math.hypot(player.x - e.x, player.y - e.y);
+        if(d < 150 + G.upgrades.magnet*40) { e.x += (player.x - e.x)*0.2*dt; e.y += (player.y - e.y)*0.2*dt; }
+        else e.y += speed;
+      } else e.y += speed;
+
+      if(Math.hypot(player.x - e.x, player.y - e.y) < (player.size + e.size)/1.8) {
+        handleHit(e, i); continue;
+      }
+      if(e.y > canvas.height + 50) G.entities.splice(i, 1);
+    }
+
+    if(G.powerTimer > 0) {
+      G.powerTimer -= dt;
+      document.getElementById('power-fill').style.width = (G.powerTimer/G.powerMax)*100 + '%';
+      if(G.powerTimer <= 0) { G.powerType = null; player.shield = false; document.getElementById('power-ui').style.display='none'; }
+    }
+
+    // 粒子更新
+    for(let i=G.particles.length-1; i>=0; i--) {
+      let p = G.particles[i]; p.x += p.vx*dt; p.y += p.vy*dt; p.life -= 0.02*dt;
+      if(p.life <= 0) G.particles.splice(i, 1);
+    }
+
+    if(!G.bossActive && G.score > G.lvl * 200) { G.lvl++; if(G.lvl%5===0) startBossFight(); }
+
+    draw();
+    requestAnimationFrame(update);
+  }
+
+  function spawn(type, x, y) {
+    G.entities.push({
+      type, x: x || Math.random()*canvas.width, y: y || -30,
+      size: type === 'obs' ? 20+Math.random()*15 : 22,
+      speed: 4 + G.lvl*0.2,
+      color: { obs:'#f05', coin:'#ff0', shield:'#0cf', magnet:'#f0f', bullet:'#f05', atk:'#fff' }[type]
+    });
+  }
+
+  function handleHit(e, idx) {
+    G.entities.splice(idx, 1);
+    if(e.type === 'obs' || e.type === 'bullet') {
+      if(G.feverMode) { G.score += 20; createExplosion(e.x, e.y, '#fff', 5); return; }
+      if(player.shield) { player.shield = false; G.powerTimer = 0; G.shake = 20; document.getElementById('power-ui').style.display='none'; }
+      else endGame();
+    } else if(e.type === 'coin') {
+      G.gold += Math.ceil(5 * (1 + G.upgrades.bonus*0.5));
+      G.totalGold += Math.ceil(5 * (1 + G.upgrades.bonus*0.5));
+      G.fever = Math.min(100, G.fever + 10 + G.upgrades.fever*3);
+      if(G.fever >= 100 && !G.feverMode) { G.feverMode = true; showCenterMsg(LANGS[G.lang].feverStart, "#f0f"); }
+    } else if(e.type === 'atk') {
+      G.boss.hp -= 10; G.shake = 10;
+    } else {
+      G.powerType = e.type; G.powerTimer = G.powerMax * (1 + G.upgrades.shield*0.5);
+      document.getElementById('power-ui').style.display = 'block';
+      document.getElementById('power-label').innerText = LANGS[G.lang][e.type];
+      if(e.type === 'shield') player.shield = true;
+    }
+  }
+
+  function startBossFight() {
+    G.bossActive = true; G.boss.hp = 100 + G.lvl*20; G.boss.maxHp = G.boss.hp; G.boss.x = canvas.width/2;
+    document.getElementById('boss-ui').style.display = 'block';
+    showCenterMsg(LANGS[G.lang].bossAlert, "var(--boss)");
+  }
+
+  function updateBoss(dt) {
+    G.boss.x += G.boss.dir * 4 * dt;
+    if(G.boss.x > canvas.width - 50 || G.boss.x < 50) G.boss.dir *= -1;
+    if(Math.random() < 0.05) spawn('bullet', G.boss.x, 80);
+    if(Math.random() < 0.03) spawn('atk');
+    document.getElementById('boss-hp-fill').style.width = (G.boss.hp/G.boss.maxHp)*100 + '%';
+    if(G.boss.hp <= 0) { G.bossActive = false; G.score += 1000; document.getElementById('boss-ui').style.display='none'; }
+  }
+
+  function draw() {
+    ctx.save();
+    if(G.shake > 0) { ctx.translate((Math.random()-0.5)*G.shake, (Math.random()-0.5)*G.shake); G.shake *= 0.8; }
+
+    ctx.shadowBlur = 15; ctx.shadowColor = G.feverMode ? '#f0f' : '#0ff';
+    ctx.fillStyle = G.feverMode ? '#fff' : '#0ff';
+    SKINS[G.currentSkin].draw(ctx, player.x, player.y, 22);
+
+    G.entities.forEach(e => {
+      ctx.shadowBlur = 10; ctx.shadowColor = e.color; ctx.fillStyle = e.color;
+      if(e.type==='coin'||e.type==='atk') { ctx.beginPath(); ctx.arc(e.x, e.y, e.size/2, 0, 6.28); ctx.fill(); }
+      else ctx.fillRect(e.x-e.size/2, e.y-e.size/2, e.size, e.size);
+    });
+
+    G.particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 2, 2); });
+    ctx.restore();
+
+    document.getElementById('score-display').innerText = Math.floor(G.score);
+    document.getElementById('gold-val').innerText = G.gold;
+    document.getElementById('lvl-val').innerText = G.lvl;
+  }
+
+  /** UI系统 **/
+  function showPanel(id) {
+    document.querySelectorAll('.center-ui').forEach(p => p.style.display='none');
+    document.getElementById(id).style.display='block';
+    if(id === 'skill-panel') renderSkills();
+    if(id === 'shop-panel') renderShop();
+  }
+
+  function renderSkills() {
+    const container = document.getElementById('skill-list'); container.innerHTML = '';
+    const l = LANGS[G.lang];
+    ['magnet', 'shield', 'fever', 'bonus'].forEach(id => {
+      const lv = G.upgrades[id]; const cost = 300 + lv*500;
+      const div = document.createElement('div'); div.className = 'item-card';
+      div.innerHTML = `
+            <canvas id="ico-${id}" class="item-icon" width="40" height="40"></canvas>
+            <div style="flex:1; text-align:left; font-size:12px"><b>${l[id]}</b><br>${l.lv}: ${lv}/5</div>
+            <button class="up-btn" ${lv>=5||G.totalGold<cost?'disabled':''} onclick="buyUpgrade('${id}',${cost})">${lv>=5?l.max:cost}</button>
+        `;
+      container.appendChild(div);
+      ICONS[id](document.getElementById(`ico-${id}`).getContext('2d'), 40);
+    });
+  }
+
+  function buyUpgrade(id, cost) {
+    G.totalGold -= cost; G.upgrades[id]++;
+    localStorage.setItem('nd_gold', G.totalGold); localStorage.setItem('nd_upgrades', JSON.stringify(G.upgrades));
+    renderSkills(); updateMenuStats();
+  }
+
+  function renderShop() {
+    const list = document.getElementById('skin-list'); list.innerHTML = '';
+    const l = LANGS[G.lang];
+    Object.keys(SKINS).forEach(id => {
+      const s = SKINS[id]; const owned = G.ownedSkins.includes(id); const active = G.currentSkin === id;
+      const div = document.createElement('div'); div.className = 'glass-panel'; div.style.padding = '10px';
+      div.style.borderColor = active ? 'var(--neon)' : 'rgba(255,255,255,0.1)';
+      div.innerHTML = `
+            <canvas id="pre-${id}" width="40" height="40"></canvas>
+            <div style="font-size:10px;margin:5px 0">${l.skins[id]}</div>
+            <button class="up-btn" style="width:100%;font-size:10px">${owned ? (active?'√':l.use) : s.price+'G'}</button>
+        `;
+      div.onclick = () => {
+        if(owned) { G.currentSkin = id; localStorage.setItem('nd_active_skin', id); }
+        else if(G.totalGold >= s.price) {
+          G.totalGold -= s.price; G.ownedSkins.push(id);
+          localStorage.setItem('nd_gold', G.totalGold); localStorage.setItem('nd_skins', JSON.stringify(G.ownedSkins));
+        }
+        renderShop(); updateMenuStats();
+      };
+      list.appendChild(div);
+      const pCtx = document.getElementById(`pre-${id}`).getContext('2d');
+      pCtx.fillStyle = owned ? (active ? '#0ff' : '#066') : '#333';
+      s.draw(pCtx, 20, 20, 20);
+    });
+  }
+
+  function toggleLang() {
+    G.lang = G.lang === 'zh' ? 'en' : 'zh';
+    localStorage.setItem('nd_lang', G.lang);
+    updateMenuStats();
+  }
+
+  function updateMenuStats() {
+    const l = LANGS[G.lang];
+    document.querySelectorAll('.t-wave').forEach(el => el.innerText = l.wave);
+    document.querySelectorAll('.t-gold').forEach(el => el.innerText = l.gold);
+    document.querySelector('.t-start').innerText = l.start;
+    document.querySelector('.t-factory').innerText = l.factory;
+    document.querySelector('.t-skills').innerText = l.skills;
+    document.querySelector('.t-best').innerText = l.best;
+    document.querySelector('.t-total-gold').innerText = l.totalGold;
+    document.querySelector('.t-over').innerText = l.over;
+    document.querySelector('.t-confirm').innerText = l.confirm;
+    document.querySelector('.t-back').innerText = l.back;
+    document.querySelector('.t-fever-mode').innerText = l.feverMode;
+    document.querySelector('.t-boss-alert').innerText = l.bossAlert;
+
+    document.getElementById('hi-score').innerText = G.highScore;
+    document.getElementById('total-gold').innerText = G.totalGold;
+
+    let rank = l.rank0;
+    if(G.highScore > 2000) rank = l.rank4;
+    else if(G.highScore > 1000) rank = l.rank3;
+    else if(G.highScore > 500) rank = l.rank2;
+    else if(G.highScore > 200) rank = l.rank1;
+    document.getElementById('rank-text').innerText = rank;
+  }
+
+  function endGame() {
+    G.active = false; G.shake = 30;
+    if(G.score > G.highScore) { G.highScore = G.score; localStorage.setItem('nd_hi', G.highScore); }
+    localStorage.setItem('nd_gold', G.totalGold);
+    document.getElementById('game-over-panel').style.display='block';
+    document.getElementById('final-score').innerText = Math.floor(G.score);
+  }
+
+  function backToMenu() {
+    document.getElementById('game-over-panel').style.display='none';
+    document.getElementById('start-screen').style.display='block';
+    updateMenuStats();
+  }
+
+  function showCenterMsg(txt, color) {
+    const m = document.getElementById('center-msg'); m.innerText = txt; m.style.color = color || 'var(--neon)';
+    m.style.opacity = 1; setTimeout(() => m.style.opacity = 0, 1200);
+  }
+
+  function createExplosion(x, y, color, count) {
+    for(let i=0; i<count; i++) G.particles.push({ x, y, color, life: 1, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10 });
+  }
+
+  // 启动执行
+  updateMenuStats();
+</script>
+</body>
+</html>
